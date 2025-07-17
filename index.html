@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Setu - Smart Shuttle Booking</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/babel-standalone@7.18.9/babel.min.js"></script>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .setu-blue { background-color: #1A237E; }
+    .setu-orange { background-color: #FF9800; }
+  </style>
+</head>
+<body class="bg-white">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // Mock data for routes and stops
+    const routes = [
+      { id: 1, name: "Ranchi to Hazaribagh", stops: ["Ranchi (8:00 AM)", "Ramgarh (8:45 AM)", "Hazaribagh (10:00 AM)"], fare: 200 },
+      { id: 2, name: "Ranchi to Bokaro", stops: ["Ranchi (9:00 AM)", "Chitarpur (9:30 AM)", "Bokaro (10:30 AM)"], fare: 150 },
+      { id: 3, name: "Ranchi to Dhanbad", stops: ["Ranchi (7:30 AM)", "Gola (8:15 AM)", "Dhanbad (9:45 AM)"], fare: 250 },
+    ];
+
+    // Mock cab price comparison
+    const cabPrices = {
+      1: 300, // Hazaribagh
+      2: 220, // Bokaro
+      3: 350, // Dhanbad
+    };
+
+    // Main App Component
+    function App() {
+      const [userRole, setUserRole] = useState(null);
+      const [lang, setLang] = useState("en");
+      const [selectedRoute, setSelectedRoute] = useState(null);
+      const [booking, setBooking] = useState(null);
+      const [showTracking, setShowTracking] = useState(false);
+      const [adminView, setAdminView] = useState(false);
+
+      // Language toggle
+      const translations = {
+        en: {
+          welcome: "Welcome to Setu",
+          selectRole: "Select Your Role",
+          passenger: "Passenger",
+          driver: "Driver",
+          admin: "Admin",
+          selectRoute: "Select Route",
+          bookNow: "Book Now",
+          fare: "Fare",
+          savings: "Savings compared to cab",
+          confirmBooking: "Confirm Booking",
+          paymentSuccess: "Payment Successful",
+          boarding: "Boarding Details",
+          track: "Track Shuttle",
+          dashboard: "Admin Dashboard",
+          bookings: "Bookings",
+          feedback: "Feedback",
+        },
+        hi: {
+          welcome: "सेतु में आपका स्वागत है",
+          selectRole: "अपनी भूमिका चुनें",
+          passenger: "यात्री",
+          driver: "चालक",
+          admin: "प्रशासक",
+          selectRoute: "मार्ग चुनें",
+          bookNow: "अभी बुक करें",
+          fare: "किराया",
+          savings: "कैब की तुलना में बचत",
+          confirmBooking: "बुकिंग की पुष्टि करें",
+          paymentSuccess: "भुगतान सफल",
+          boarding: "बोर्डिंग विवरण",
+          track: "शटल ट्रैक करें",
+          dashboard: "प्रशासक डैशबोर्ड",
+          bookings: "बुकिंग्स",
+          feedback: "प्रतिक्रिया",
+        },
+      };
+
+      // Role Selection
+      if (!userRole) {
+        return (
+          <div className="min-h-screen setu-blue text-white flex flex-col items-center justify-center p-4">
+            <h1 className="text-3xl font-bold mb-6">{translations[lang].welcome}</h1>
+            <div className="flex space-x-4 mb-4">
+              <button onClick={() => setLang("en")} className="px-4 py-2 bg-setu-orange rounded">English</button>
+              <button onClick={() => setLang("hi")} className="px-4 py-2 bg-setu-orange rounded">हिन्दी</button>
+            </div>
+            <h2 className="text-xl mb-4">{translations[lang].selectRole}</h2>
+            <div className="flex flex-col space-y-4">
+              <button onClick={() => setUserRole("passenger")} className="px-6 py-3 bg-setu-orange rounded-lg">{translations[lang].passenger}</button>
+              <button onClick={() => setUserRole("driver")} className="px-6 py-3 bg-setu-orange rounded-lg">{translations[lang].driver}</button>
+              <button onClick={() => setUserRole("admin")} className="px-6 py-3 bg-setu-orange rounded-lg">{translations[lang].admin}</button>
+            </div>
+          </div>
+        );
+      }
+
+      // Passenger View
+      if (userRole === "passenger") {
+        return (
+          <div className="min-h-screen bg-white p-4">
+            <div className="flex justify-between mb-4">
+              <h1 className="text-2xl font-bold text-setu-blue">{translations[lang].welcome}</h1>
+              <div>
+                <button onClick={() => setLang("en")} className="px-2 py-1 bg-setu-orange text-white rounded mr-2">EN</button>
+                <button onClick={() => setLang("hi")} className="px-2 py-1 bg-setu-orange text-white rounded">HI</button>
+              </div>
+            </div>
+
+            {!selectedRoute && !booking && !showTracking && (
+              <div>
+                <h2 className="text-xl text-setu-blue mb-4">{translations[lang].selectRoute}</h2>
+                {routes.map(route => (
+                  <div key={route.id} className="border p-4 mb-4 rounded-lg">
+                    <h3 className="text-lg font-semibold">{route.name}</h3>
+                    <p>{route.stops.join(" → ")}</p>
+                    <p>{translations[lang].fare}: ₹{route.fare}</p>
+                    <p>{translations[lang].savings}: {((cabPrices[route.id] - route.fare) / cabPrices[route.id] * 100).toFixed(2)}%</p>
+                    <button
+                      onClick={() => setSelectedRoute(route)}
+                      className="mt-2 px-4 py-2 bg-setu-orange text-white rounded"
+                    >
+                      {translations[lang].bookNow}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {selectedRoute && !booking && !showTracking && (
+              <div>
+                <h2 className="text-xl text-setu-blue mb-4">{translations[lang].confirmBooking}</h2>
+                <p className="text-lg font-semibold">{selectedRoute.name}</p>
+                <p>{selectedRoute.stops.join(" → ")}</p>
+                <p>{translations[lang].fare}: ₹{selectedRoute.fare}</p>
+                <button
+                  onClick={() => {
+                    const options = {
+                      key: "rzp_test_12345",
+                      amount: selectedRoute.fare * 100,
+                      currency: "INR",
+                      name: "Setu",
+                      description: `Booking for ${selectedRoute.name}`,
+                      handler: function (response) {
+                        setBooking({ route: selectedRoute, paymentId: response.razorpay_payment_id });
+                      },
+                    };
+                    const rzp = new window.Razorpay(options);
+                    rzp.open();
+                  }}
+                  className="mt-4 px-4 py-2 bg-setu-orange text-white rounded"
+                >
+                  Pay via Razorpay
+                </button>
+                <button
+                  onClick={() => setBooking({ route: selectedRoute, paymentId: "CASH" })}
+                  className="mt-2 px-4 py-2 bg-setu-blue text-white rounded"
+                >
+                  Pay Cash on Board
+                </button>
+              </div>
+            )}
+
+            {booking && !showTracking && (
+              <div>
+                <h2 className="text-xl text-setu-blue mb-4">{translations[lang].paymentSuccess}</h2>
+                <p className="text-lg font-semibold">{translations[lang].booking}</p>
+                <p>Route: {booking.route.name}</p>
+                <p>Payment ID: {booking.paymentId}</p>
+                <p>Seat: A{Math.floor(Math.random() * 20) + 1}</p>
+                <div className="mt-4">
+                  <h3 className="text-lg font-semibold">{translations[lang].boarding}</h3>
+                  <p>Bus: Setu Shuttle #123</p>
+                  <p>Conductor: Mr. Sharma</p>
+                  <p>Registration: JH01XX1234</p>
+                  <div className="mt-2">
+                    <canvas id="qrCode" width="100" height="100"></canvas>
+                    <p className="text-sm">Scan QR at boarding</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowTracking(true)}
+                  className="mt-4 px-4 py-2 bg-setu-orange text-white rounded"
+                >
+                  {translations[lang].track}
+                </button>
+              </div>
+            )}
+
+            {showTracking && (
+              <div>
+                <h2 className="text-xl text-setu-blue mb-4">Live Tracking</h2>
+                <div className="h-64 bg-gray-200 rounded flex items-center justify-center">
+                  <p>Map Placeholder: Shuttle at {booking.route.stops[0]}</p>
+                </div>
+                <p>Passenger Location: Highlighted on Map</p>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // Driver View
+      if (userRole === "driver") {
+        return (
+          <div className="min-h-screen bg-white p-4">
+            <h1 className="text-2xl font-bold text-setu-blue mb-4">Driver Dashboard</h1>
+            <h2 className="text-xl text-setu-blue mb-4">Assigned Route: Ranchi to Hazaribagh</h2>
+            <p>Passengers: 12/20</p>
+            <p>Next Stop: Ramgarh (8:45 AM)</p>
+            <div className="h-64 bg-gray-200 rounded flex items-center justify-center">
+              <p>Map Placeholder: Passenger Locations</p>
+            </div>
+          </div>
+        );
+      }
+
+      // Admin View
+      if (userRole === "admin") {
+        return (
+          <div className="min-h-screen bg-white p-4">
+            <h1 className="text-2xl font-bold text-setu-blue mb-4">{translations[lang].dashboard}</h1>
+            <h2 className="text-xl text-setu-blue mb-4">{translations[lang].bookings}</h2>
+            <p>Total Bookings: 45</p>
+            <p>Occupancy: 75%</p>
+            <h2 className="text-xl text-setu-blue mb-4 mt-4">{translations[lang].feedback}</h2>
+            <p>Recent Feedback: "Smooth ride, great service!"</p>
+          </div>
+        );
+      }
+    }
+
+    // Render App
+    ReactDOM.render(<App />, document.getElementById("root"));
+
+    // Mock QR Code Generation
+    function generateQRCode() {
+      const canvas = document.getElementById("qrCode");
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, 100, 100);
+        ctx.fillStyle = "white";
+        ctx.fillRect(10, 10, 80, 80);
+        // Simplified QR pattern
+        for (let i = 0; i < 5; i++) {
+          ctx.fillStyle = "black";
+          ctx.fillRect(20 + i * 10, 20, 5, 5);
+        }
+      }
+    }
+    setTimeout(generateQRCode, 1000);
+  </script>
+</body>
+</html>
